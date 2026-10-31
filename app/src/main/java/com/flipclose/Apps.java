@@ -17,9 +17,9 @@ final class Apps {
         return c.getPackageManager().queryIntentActivities(i, 0);
     }
 
-    /** Never closed: this app, the launcher, keyboards, and the user's never-close list. */
+    /** Never closed: this app, the launcher, keyboards, . */
     static Set<String> protectedPackages(Context c) {
-        Set<String> s = new HashSet<>(Prefs.keep(c));
+        Set<String> s = new HashSet<>();
         s.add(c.getPackageName());
         Intent home = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME);
         for (ResolveInfo r : c.getPackageManager().queryIntentActivities(home, 0)) {

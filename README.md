@@ -12,3 +12,5 @@ Modes (pick in the app):
 First run is a dry run (detects the flip, closes nothing). Turn it off in the app when the detection feels right.
 
 Optional release signing: add repo secrets KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS. Without them the release APK uses a debug key.
+
+Optional: allow "Display over other apps" (button in the app). Then the countdown covers the whole screen with a big Cancel button, so taps cannot reach the app underneath. Without it, a notification with a Cancel button is used. Flipping back cancels in both cases.
