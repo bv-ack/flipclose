@@ -1,0 +1,73 @@
+# Put this file in your repo at .github/workflows/zip-release.yml (once, by hand).
+# Then upload any .zip to the repo root: it is unpacked, the zip is deleted,
+# a Gradle project (if any) is built, and a release is created with the results.
+name: zip-to-release
+on:
+  push:
+    paths: ['*.zip']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unpack zip and delete it
+        id: unpack
+        run: |
+          shopt -s nullglob
+          mkdir -p /tmp/rel
+          for z in *.zip; do
+            cp "$z" /tmp/rel/
+            rm -rf /tmp/u && mkdir /tmp/u && unzip -q "$z" -d /tmp/u
+            if [ "$(ls -A /tmp/u | wc -l)" = 1 ] && [ -d "/tmp/u/$(ls -A /tmp/u)" ]; then
+              src="/tmp/u/$(ls -A /tmp/u)"
+            else
+              src=/tmp/u
+            fi
+            rm -rf "$src/.github"
+            cp -a "$src"/. .
+            git rm -q "$z"
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          done
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add -A
+          if ! git diff --cached --quiet; then git commit -qm "Unpack zip"; git push; fi
+
+      - uses: actions/setup-java@v4
+        if: steps.unpack.outputs.found == 'true'
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        if: steps.unpack.outputs.found == 'true'
+        with:
+          gradle-version: '8.9'
+
+      - name: Build if it is a Gradle project
+        if: steps.unpack.outputs.found == 'true' && hashFiles('settings.gradle', 'settings.gradle.kts') != ''
+        env:
+          KS_B64: ${{ secrets.KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
+          KS_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          if [ -n "$KS_B64" ]; then
+            echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/ks.jks"
+            export KS_FILE="$RUNNER_TEMP/ks.jks"
+          fi
+          gradle assembleRelease -PvCode=${{ github.run_number }} --no-daemon
+          find . -name '*.apk' -path '*release*' -exec cp {} /tmp/rel/ \;
+
+      - name: Create release
+        if: steps.unpack.outputs.found == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${{ github.run_number }}" /tmp/rel/* \
+            --title "Build ${{ github.run_number }}" --generate-notes
+            
