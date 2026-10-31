@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">FlipClose</string>
+    <string name="a11y_desc">Opens the recents screen and presses its clear-all button when you flip the device face-down.</string>
+</resources>
