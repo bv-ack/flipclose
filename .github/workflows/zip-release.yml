@@ -1,6 +1,3 @@
-# Put this file in your repo at .github/workflows/zip-release.yml (once, by hand).
-# Then upload any .zip to the repo root: it is unpacked, the zip is deleted,
-# a Gradle project (if any) is built, and a release is created with the results.
 name: zip-to-release
 on:
   push:
@@ -17,7 +14,8 @@ jobs:
       - name: Unpack zip and delete it
         id: unpack
         run: |
-          shopt -s nullglob
+          shopt -s nullglob extglob
+          rm -rf !(.github|*.zip)
           mkdir -p /tmp/rel
           for z in *.zip; do
             cp "$z" /tmp/rel/
