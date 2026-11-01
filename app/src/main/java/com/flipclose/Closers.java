@@ -36,6 +36,15 @@ final class Closers {
         return "Clearing recents";
     }
 
+    /** Undo: lifts any suspension this app may have left behind (device owner only). */
+    static String restore(Context c) {
+        DevicePolicyManager d = (DevicePolicyManager) c.getSystemService(Context.DEVICE_POLICY_SERVICE);
+        if (!d.isDeviceOwnerApp(c.getPackageName())) return "Not device owner, nothing to restore";
+        List<String> t = Apps.targets(c);
+        d.setPackagesSuspended(new ComponentName(c, AdminReceiver.class), t.toArray(new String[0]), false);
+        return "Lifted suspension on " + t.size() + " apps";
+    }
+
     /** Needs device owner: suspends every closable app, then lifts the suspension. */
     static String owner(Context c) {
         final DevicePolicyManager d = (DevicePolicyManager) c.getSystemService(Context.DEVICE_POLICY_SERVICE);

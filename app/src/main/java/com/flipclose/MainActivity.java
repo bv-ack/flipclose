@@ -75,6 +75,17 @@ public class MainActivity extends Activity implements SensorEventListener {
         });
         root.addView(dry);
 
+        Switch up = new Switch(this);
+        up.setText("Also trigger on upside-down flip");
+        up.setChecked(Prefs.upside(this));
+        up.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override public void onCheckedChanged(CompoundButton v, boolean on) {
+                Prefs.setUpside(MainActivity.this, on);
+                toast(on ? "Upside-down flip on" : "Upside-down flip off");
+            }
+        });
+        root.addView(up);
+
         RadioGroup g = new RadioGroup(this);
         String[] names = {"Soft: stop background apps", "Accessibility: clear recents", "Device owner: suspend all apps"};
         for (int i = 0; i < names.length; i++) {
@@ -123,6 +134,13 @@ public class MainActivity extends Activity implements SensorEventListener {
                         toast(r);
                     }
                 }, 5000);
+            }
+        }));
+        root.addView(button("Restore apps (undo suspension)", new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                String r;
+                try { r = Closers.restore(MainActivity.this); } catch (Exception e) { r = "Failed: " + e.getMessage(); }
+                toast(r);
             }
         }));
         root.addView(button("Accessibility settings", new View.OnClickListener() {

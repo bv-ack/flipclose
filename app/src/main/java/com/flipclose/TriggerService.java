@@ -56,6 +56,8 @@ public class TriggerService extends Service implements FlipDetector.Callback {
         tick();
     }
 
+    @Override public boolean upsideEnabled() { return Prefs.upside(this); }
+
     @Override public void onFlipBack() {
         if (left >= 0) { cancel(); say("Cancelled (flipped back)"); }
     }

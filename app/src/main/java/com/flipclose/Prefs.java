@@ -17,6 +17,8 @@ final class Prefs {
     static void setMode(Context c, int v) { p(c).edit().putInt("mode", v).apply(); }
     static boolean dryRun(Context c) { return p(c).getBoolean("dry", true); }
     static void setDryRun(Context c, boolean v) { p(c).edit().putBoolean("dry", v).apply(); }
+    static boolean upside(Context c) { return p(c).getBoolean("upside", true); }
+    static void setUpside(Context c, boolean v) { p(c).edit().putBoolean("upside", v).apply(); }
     static int countdown(Context c) { return p(c).getInt("count", 5); }
     static void setCountdown(Context c, int v) { p(c).edit().putInt("count", Math.max(0, v)).apply(); }
     static String label(Context c) { return p(c).getString("label", "Clear all"); }
