@@ -8,6 +8,7 @@ import android.content.Intent;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.UserManager;
 import android.provider.Settings;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -87,6 +88,32 @@ final class Closers {
         List<String> t = Apps.targets(c);
         d.setPackagesSuspended(new ComponentName(c, AdminReceiver.class), t.toArray(new String[0]), false);
         return "Lifted suspension on " + t.size() + " apps";
+    }
+
+    /** Device owner: block uninstalling this app and clearing its data or force-stopping it from Settings. */
+    static String protectApp(Context c, boolean on) {
+        DevicePolicyManager d = (DevicePolicyManager) c.getSystemService(Context.DEVICE_POLICY_SERVICE);
+        ComponentName admin = new ComponentName(c, AdminReceiver.class);
+        if (!d.isDeviceOwnerApp(c.getPackageName())) return "Not device owner";
+        d.setUninstallBlocked(admin, c.getPackageName(), on);
+        if (Build.VERSION.SDK_INT >= 30) {
+            d.setUserControlDisabledPackages(admin, on ? Collections.singletonList(c.getPackageName()) : Collections.<String>emptyList());
+        }
+        return on ? "App protected: no uninstall, no clearing data from Settings" : "App protection removed";
+    }
+
+    /** Device owner: stop the date and time being changed by hand (keeps downtime honest). */
+    static String lockTime(Context c, boolean on) {
+        DevicePolicyManager d = (DevicePolicyManager) c.getSystemService(Context.DEVICE_POLICY_SERVICE);
+        ComponentName admin = new ComponentName(c, AdminReceiver.class);
+        if (!d.isDeviceOwnerApp(c.getPackageName())) return "Not device owner";
+        if (on) {
+            d.addUserRestriction(admin, UserManager.DISALLOW_CONFIG_DATE_TIME);
+            if (Build.VERSION.SDK_INT >= 30) d.setAutoTimeEnabled(admin, true);
+            return "Date and time locked to network time";
+        }
+        d.clearUserRestriction(admin, UserManager.DISALLOW_CONFIG_DATE_TIME);
+        return "Date and time unlocked";
     }
 
     /** Device owner: lock Private DNS to Cloudflare's family filter, or give it back to automatic. */

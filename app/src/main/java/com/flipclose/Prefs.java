@@ -28,6 +28,19 @@ final class Prefs {
     static void setCountdown(Context c, int v) { p(c).edit().putInt("count", Math.max(0, v)).apply(); }
     static String label(Context c) { return p(c).getString("label", "Clear all"); }
     static void setLabel(Context c, String v) { p(c).edit().putString("label", v).apply(); }
+    private static Set<String> set(Context c, String k) { return new HashSet<>(p(c).getStringSet(k, new HashSet<String>())); }
+    private static void put(Context c, String k, Set<String> v) { p(c).edit().putStringSet(k, v).apply(); }
+    static Set<String> blocked(Context c) { return set(c, "blocked"); }          // always suspended
+    static void setBlocked(Context c, Set<String> v) { put(c, "blocked", v); }
+    static Set<String> dtApps(Context c) { return set(c, "dtapps"); }            // suspended during downtime
+    static void setDtApps(Context c, Set<String> v) { put(c, "dtapps", v); }
+    static Set<String> applied(Context c) { return set(c, "applied"); }          // suspended by the rules right now
+    static void setApplied(Context c, Set<String> v) { put(c, "applied", v); }
+    static boolean dtOn(Context c) { return p(c).getBoolean("dton", false); }
+    static void setDtOn(Context c, boolean v) { p(c).edit().putBoolean("dton", v).apply(); }
+    static int dtStart(Context c) { return p(c).getInt("dts", 22 * 60); }       // minutes after midnight
+    static int dtEnd(Context c) { return p(c).getInt("dte", 7 * 60); }
+    static void setDtTimes(Context c, int s, int e) { p(c).edit().putInt("dts", s).putInt("dte", e).apply(); }
     static String last(Context c) { return p(c).getString("last", "nothing yet"); }
     static void setLast(Context c, String v) { p(c).edit().putString("last", v).apply(); }
     static Set<String> keep(Context c) {

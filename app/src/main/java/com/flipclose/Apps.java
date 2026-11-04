@@ -37,8 +37,14 @@ final class Apps {
 
     /** The fixed list above, this app, launchers, keyboards, the dialer, and the user's never-close list. */
     static Set<String> protectedPackages(Context c) {
-        Set<String> s = new HashSet<>(Arrays.asList(ALWAYS));
+        Set<String> s = hardProtected(c);
         s.addAll(Prefs.keep(c));
+        return s;
+    }
+
+    /** Fixed list, this app, launchers, keyboards and the dialer: never suspended by any rule. */
+    static Set<String> hardProtected(Context c) {
+        Set<String> s = new HashSet<>(Arrays.asList(ALWAYS));
         s.add(c.getPackageName());
         Intent home = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME);
         for (ResolveInfo r : c.getPackageManager().queryIntentActivities(home, 0)) {
@@ -65,6 +71,7 @@ final class Apps {
     /** Apps to close when the scope is "all". */
     static List<String> targets(Context c) {
         Set<String> skip = protectedPackages(c);
+        skip.addAll(Prefs.applied(c)); // already suspended by a rule: do not lift it afterwards
         List<String> out = new ArrayList<>();
         for (ResolveInfo r : launchable(c)) {
             String p = r.activityInfo.packageName;

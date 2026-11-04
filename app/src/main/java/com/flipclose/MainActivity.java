@@ -30,6 +30,9 @@ import android.widget.ScrollView;
 import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
+import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /** Purpose: the one settings screen (behind the PIN, if set), with live feedback so you can see what works. */
 public class MainActivity extends Activity implements SensorEventListener {
@@ -77,6 +80,7 @@ public class MainActivity extends Activity implements SensorEventListener {
     private void show() {
         if (Lock.isSet(this) && !unlocked) { gate(); return; }
         buildMain();
+        try { Enforcer.apply(this, false); } catch (Exception e) { /* not device owner */ }
         DevicePolicyManager d = (DevicePolicyManager) getSystemService(DEVICE_POLICY_SERVICE);
         PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
         slow = "\nDevice owner: " + (d.isDeviceOwnerApp(getPackageName()) ? "yes" : "no")
@@ -186,7 +190,7 @@ public class MainActivity extends Activity implements SensorEventListener {
         root.addView(status);
 
         Switch run = new Switch(this);
-        run.setText("Listen for face-down");
+        run.setText("Run service (face-down and downtime)");
         run.setChecked(Prefs.enabled(this));
         run.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override public void onCheckedChanged(CompoundButton v, boolean on) {
@@ -245,6 +249,38 @@ public class MainActivity extends Activity implements SensorEventListener {
             }
         }));
 
+        root.addView(heading("Downtime and blocked apps (device owner)"));
+        Switch dt = new Switch(this);
+        dt.setText("Downtime on (the service must be running)");
+        dt.setChecked(Prefs.dtOn(this));
+        dt.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override public void onCheckedChanged(CompoundButton v, boolean on) {
+                Prefs.setDtOn(MainActivity.this, on);
+                applyNow(false);
+            }
+        });
+        root.addView(dt);
+        final EditText from = timeField("Start, 24 h (22:00)", Prefs.dtStart(this));
+        final EditText to = timeField("End, 24 h (07:00)", Prefs.dtEnd(this));
+        root.addView(from);
+        root.addView(to);
+        root.addView(button("Save downtime times", new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                int s = parseTime(from.getText().toString()), e = parseTime(to.getText().toString());
+                if (s < 0 || e < 0) { toast("Use the form HH:MM, for example 22:00"); return; }
+                Prefs.setDtTimes(MainActivity.this, s, e);
+                toast("Saved: " + hm(s) + " to " + hm(e));
+                applyNow(false);
+            }
+        }));
+        root.addView(button("Downtime apps", open(new Intent(this, BlockedAppsActivity.class)
+                .putExtra(BlockedAppsActivity.WHICH, "downtime"))));
+        root.addView(button("Blocked apps (always suspended)", open(new Intent(this, BlockedAppsActivity.class)
+                .putExtra(BlockedAppsActivity.WHICH, "blocked"))));
+        root.addView(button("Apply rules now", new View.OnClickListener() {
+            @Override public void onClick(View v) { applyNow(true); }
+        }));
+
         root.addView(heading("PIN lock (protects this screen)"));
         root.addView(button(Lock.isSet(this) ? "Change PIN" : "Set 6-digit PIN", new View.OnClickListener() {
             @Override public void onClick(View v) { setPinDialog(); }
@@ -269,6 +305,10 @@ public class MainActivity extends Activity implements SensorEventListener {
         root.addView(heading("Device owner tools"));
         root.addView(button("Cloudflare family DNS", dnsClick(true)));
         root.addView(button("Reset DNS to automatic", dnsClick(false)));
+        root.addView(button("Protect this app (no uninstall, no clearing data)", ownerTool(0)));
+        root.addView(button("Remove app protection", ownerTool(1)));
+        root.addView(button("Lock date and time", ownerTool(2)));
+        root.addView(button("Unlock date and time", ownerTool(3)));
         root.addView(button("Restore apps (undo suspension)", new View.OnClickListener() {
             @Override public void onClick(View v) {
                 String r;
@@ -287,6 +327,9 @@ public class MainActivity extends Activity implements SensorEventListener {
                 + "\nService: " + (TriggerService.running ? "running" : "stopped")
                 + "\nAccessibility: " + (CloserAccessibilityService.instance != null ? "running" : "off")
                 + slow
+                + "\nDowntime: " + (Prefs.dtOn(this) ? hm(Prefs.dtStart(this)) + "-" + hm(Prefs.dtEnd(this))
+                        + (Enforcer.downtimeActive(this) ? " (active)" : " (idle)") : "off")
+                + "\nSuspended by rules: " + Prefs.applied(this).size()
                 + "\nLast: " + Prefs.last(this) + "\n");
     }
 
@@ -334,6 +377,47 @@ public class MainActivity extends Activity implements SensorEventListener {
                 }).start();
             }
         };
+    }
+
+    private void applyNow(boolean force) {
+        String r;
+        try { r = Enforcer.apply(this, force); } catch (Exception e) { r = "Failed: " + e.getMessage(); }
+        toast(r);
+    }
+
+    private View.OnClickListener ownerTool(final int what) {
+        return new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                String r;
+                try {
+                    switch (what) {
+                        case 0: r = Closers.protectApp(MainActivity.this, true); break;
+                        case 1: r = Closers.protectApp(MainActivity.this, false); break;
+                        case 2: r = Closers.lockTime(MainActivity.this, true); break;
+                        default: r = Closers.lockTime(MainActivity.this, false);
+                    }
+                } catch (Exception e) { r = "Failed: " + e.getMessage(); }
+                toast(r);
+            }
+        };
+    }
+
+    private EditText timeField(String hint, int minutes) {
+        EditText e = new EditText(this);
+        e.setHint(hint);
+        e.setInputType(InputType.TYPE_CLASS_DATETIME | InputType.TYPE_DATETIME_VARIATION_TIME);
+        e.setText(hm(minutes));
+        return e;
+    }
+
+    private static String hm(int minutes) { return String.format(Locale.US, "%02d:%02d", minutes / 60, minutes % 60); }
+
+    /** "HH:MM" to minutes after midnight, or -1 if it is not a valid time. */
+    private static int parseTime(String s) {
+        Matcher m = Pattern.compile("^\\s*(\\d{1,2}):(\\d{2})\\s*$").matcher(s);
+        if (!m.matches()) return -1;
+        int h = Integer.parseInt(m.group(1)), mi = Integer.parseInt(m.group(2));
+        return h > 23 || mi > 59 ? -1 : h * 60 + mi;
     }
 
     private Button button(String text, View.OnClickListener l) {

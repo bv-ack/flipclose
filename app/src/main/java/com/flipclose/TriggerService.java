@@ -29,6 +29,12 @@ public class TriggerService extends Service implements FlipDetector.Callback {
     private FlipDetector det;
     private ConfirmOverlay overlay;
     private int left = -1; // seconds remaining; -1 = no countdown running
+    private final Runnable enforceR = new Runnable() {
+        @Override public void run() {
+            try { Enforcer.apply(TriggerService.this, false); } catch (Exception e) { /* try again next time */ }
+            h.postDelayed(this, 30000);
+        }
+    };
 
     @Override public void onCreate() {
         running = true;
@@ -42,6 +48,8 @@ public class TriggerService extends Service implements FlipDetector.Callback {
         det = new FlipDetector(this);
         overlay = new ConfirmOverlay(this);
         sm.registerListener(det, sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), SensorManager.SENSOR_DELAY_NORMAL);
+        try { Enforcer.apply(this, true); } catch (Exception e) { /* not device owner, or no rules */ }
+        h.postDelayed(enforceR, 30000);
         say("Listening started");
     }
 
