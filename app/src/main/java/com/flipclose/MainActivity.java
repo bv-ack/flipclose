@@ -12,6 +12,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.PowerManager;
 import android.provider.Settings;
 import android.text.InputType;
 import android.view.View;
@@ -28,10 +29,15 @@ import android.widget.Toast;
 
 /** Purpose: the one settings screen, with live feedback so you can see what works. */
 public class MainActivity extends Activity implements SensorEventListener {
-    private static final String[] MODES = {"Soft", "Accessibility", "Device owner"};
+    private static final String[] SCOPES = {"Close all apps", "Close only the app in front"};
+    private static final String[] MODES = {"Soft: stop apps in the background", "Accessibility: clear recents", "Device owner: suspend apps"};
+
+    private interface Choice { void pick(int i); }
+
     private TextView status;
     private SensorManager sm;
     private float z;
+    private String slow = "";
 
     private void toast(String t) { Toast.makeText(getApplicationContext(), t, Toast.LENGTH_SHORT).show(); }
 
@@ -52,7 +58,7 @@ public class MainActivity extends Activity implements SensorEventListener {
         root.addView(status);
 
         Switch run = new Switch(this);
-        run.setText("Listen for flip");
+        run.setText("Listen for face-down");
         run.setChecked(Prefs.enabled(this));
         run.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override public void onCheckedChanged(CompoundButton v, boolean on) {
@@ -64,44 +70,14 @@ public class MainActivity extends Activity implements SensorEventListener {
         });
         root.addView(run);
 
-        Switch dry = new Switch(this);
-        dry.setText("Dry run (detect only, close nothing)");
-        dry.setChecked(Prefs.dryRun(this));
-        dry.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-            @Override public void onCheckedChanged(CompoundButton v, boolean on) {
-                Prefs.setDryRun(MainActivity.this, on);
-                toast(on ? "Dry run on: nothing will be closed" : "Dry run off: apps WILL be closed");
-            }
-        });
-        root.addView(dry);
-
-        Switch up = new Switch(this);
-        up.setText("Also trigger on upside-down flip");
-        up.setChecked(Prefs.upside(this));
-        up.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-            @Override public void onCheckedChanged(CompoundButton v, boolean on) {
-                Prefs.setUpside(MainActivity.this, on);
-                toast(on ? "Upside-down flip on" : "Upside-down flip off");
-            }
-        });
-        root.addView(up);
-
-        RadioGroup g = new RadioGroup(this);
-        String[] names = {"Soft: stop background apps", "Accessibility: clear recents", "Device owner: suspend all apps"};
-        for (int i = 0; i < names.length; i++) {
-            RadioButton r = new RadioButton(this);
-            r.setText(names[i]);
-            r.setId(1000 + i);
-            g.addView(r);
-        }
-        g.check(1000 + Prefs.mode(this));
-        g.setOnCheckedChangeListener(new RadioGroup.OnCheckedChangeListener() {
-            @Override public void onCheckedChanged(RadioGroup grp, int id) {
-                Prefs.setMode(MainActivity.this, id - 1000);
-                toast("Mode saved: " + MODES[id - 1000]);
-            }
-        });
-        root.addView(g);
+        root.addView(heading("What to close"));
+        root.addView(radios(SCOPES, Prefs.scope(this), 2000, new Choice() {
+            @Override public void pick(int i) { Prefs.setScope(MainActivity.this, i); toast("Saved: " + SCOPES[i]); }
+        }));
+        root.addView(heading("How to close"));
+        root.addView(radios(MODES, Prefs.mode(this), 1000, new Choice() {
+            @Override public void pick(int i) { Prefs.setMode(MainActivity.this, i); toast("Saved: " + MODES[i]); }
+        }));
 
         final EditText sec = new EditText(this);
         sec.setHint("Countdown seconds");
@@ -123,7 +99,7 @@ public class MainActivity extends Activity implements SensorEventListener {
             }
         }));
 
-        root.addView(button("Test close in 5 s (selected mode)", new View.OnClickListener() {
+        root.addView(button("Test close in 5 s", new View.OnClickListener() {
             @Override public void onClick(View v) {
                 toast("Open some apps, then go home. Closing in 5 s");
                 new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
@@ -136,6 +112,21 @@ public class MainActivity extends Activity implements SensorEventListener {
                 }, 5000);
             }
         }));
+
+        root.addView(heading("Permissions and tools"));
+        root.addView(button("Never-close apps", open(new Intent(this, NeverCloseActivity.class))));
+        root.addView(button("Usage access (to know the app in front)", open(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))));
+        root.addView(button("Allow running in background (battery)", open(new Intent(
+                Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + getPackageName())))));
+        root.addView(button("Accessibility settings", open(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))));
+        root.addView(button("Display over other apps (optional)", open(new Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName())))));
+        root.addView(button("App info (for \"Allow restricted settings\")", open(new Intent(
+                Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName())))));
+
+        root.addView(heading("Device owner tools"));
+        root.addView(button("Cloudflare family DNS", dnsClick(true)));
+        root.addView(button("Reset DNS to automatic", dnsClick(false)));
         root.addView(button("Restore apps (undo suspension)", new View.OnClickListener() {
             @Override public void onClick(View v) {
                 String r;
@@ -143,25 +134,16 @@ public class MainActivity extends Activity implements SensorEventListener {
                 toast(r);
             }
         }));
-        root.addView(button("Accessibility settings", new View.OnClickListener() {
-            @Override public void onClick(View v) { startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)); }
-        }));
-        root.addView(button("Allow display over other apps (cover-screen confirm)", new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                        Uri.parse("package:" + getPackageName())));
-            }
-        }));
-        root.addView(button("App info (for \"Allow restricted settings\")", new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                        Uri.parse("package:" + getPackageName())));
-            }
-        }));
     }
 
     @Override protected void onResume() {
         super.onResume();
+        DevicePolicyManager d = (DevicePolicyManager) getSystemService(DEVICE_POLICY_SERVICE);
+        PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+        slow = "\nDevice owner: " + (d.isDeviceOwnerApp(getPackageName()) ? "yes" : "no")
+                + "\nUsage access: " + (Apps.usageAllowed(this) ? "yes" : "no")
+                + "\nBackground: " + (pm.isIgnoringBatteryOptimizations(getPackageName()) ? "unrestricted" : "optimized (may be killed)")
+                + "\nOverlay: " + (ConfirmOverlay.allowed(this) ? "allowed" : "off");
         sm.registerListener(this, sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), SensorManager.SENSOR_DELAY_UI);
         refresh();
     }
@@ -175,13 +157,57 @@ public class MainActivity extends Activity implements SensorEventListener {
     @Override public void onAccuracyChanged(Sensor s, int a) {}
 
     private void refresh() {
-        DevicePolicyManager d = (DevicePolicyManager) getSystemService(DEVICE_POLICY_SERVICE);
         status.setText(String.format("Sensor z: %.1f (%s)", z, z < -7.5f ? "face-down" : z > 7.5f ? "face-up" : "tilted")
                 + "\nService: " + (TriggerService.running ? "running" : "stopped")
-                + "\nDevice owner: " + (d.isDeviceOwnerApp(getPackageName()) ? "yes" : "no")
                 + "\nAccessibility: " + (CloserAccessibilityService.instance != null ? "running" : "off")
-                + "\nOverlay: " + (ConfirmOverlay.allowed(this) ? "allowed" : "off (notification is used)")
+                + slow
                 + "\nLast: " + Prefs.last(this) + "\n");
+    }
+
+    private TextView heading(String t) {
+        TextView v = new TextView(this);
+        v.setText(t);
+        v.setTextSize(16);
+        v.setPadding(0, 40, 0, 10);
+        return v;
+    }
+
+    private RadioGroup radios(String[] names, int selected, int base, final Choice ch) {
+        final int b = base;
+        RadioGroup g = new RadioGroup(this);
+        for (int i = 0; i < names.length; i++) {
+            RadioButton r = new RadioButton(this);
+            r.setText(names[i]);
+            r.setId(b + i);
+            g.addView(r);
+        }
+        g.check(b + selected);
+        g.setOnCheckedChangeListener(new RadioGroup.OnCheckedChangeListener() {
+            @Override public void onCheckedChanged(RadioGroup grp, int id) { ch.pick(id - b); }
+        });
+        return g;
+    }
+
+    private View.OnClickListener open(final Intent i) {
+        return new View.OnClickListener() {
+            @Override public void onClick(View v) { startActivity(i); }
+        };
+    }
+
+    private View.OnClickListener dnsClick(final boolean family) {
+        return new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                toast("Working...");
+                new Thread(new Runnable() {
+                    @Override public void run() {
+                        String r;
+                        try { r = Closers.dns(MainActivity.this, family); } catch (Exception e) { r = "Failed: " + e.getMessage(); }
+                        final String fr = r;
+                        runOnUiThread(new Runnable() { @Override public void run() { toast(fr); } });
+                    }
+                }).start();
+            }
+        };
     }
 
     private Button button(String text, View.OnClickListener l) {

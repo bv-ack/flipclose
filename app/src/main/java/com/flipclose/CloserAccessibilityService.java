@@ -18,6 +18,8 @@ public class CloserAccessibilityService extends AccessibilityService {
     @Override public void onAccessibilityEvent(AccessibilityEvent e) {}
     @Override public void onInterrupt() {}
 
+    boolean home() { return performGlobalAction(GLOBAL_ACTION_HOME); }
+
     void clearRecents(String label) {
         performGlobalAction(GLOBAL_ACTION_RECENTS);
         attempt(label, 0);

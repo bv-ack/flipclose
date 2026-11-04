@@ -56,8 +56,6 @@ public class TriggerService extends Service implements FlipDetector.Callback {
         tick();
     }
 
-    @Override public boolean upsideEnabled() { return Prefs.upside(this); }
-
     @Override public void onFlipBack() {
         if (left >= 0) { cancel(); say("Cancelled (flipped back)"); }
     }
@@ -68,10 +66,7 @@ public class TriggerService extends Service implements FlipDetector.Callback {
             left = -1;
             overlay.hide();
             String r;
-            if (Prefs.dryRun(this)) r = "Dry run: nothing closed";
-            else {
-                try { r = Closers.run(this); } catch (Exception e) { r = "Failed: " + e.getMessage(); }
-            }
+            try { r = Closers.run(this); } catch (Exception e) { r = "Failed: " + e.getMessage(); }
             say(r);
             show("FlipClose", r, false);
             return;
