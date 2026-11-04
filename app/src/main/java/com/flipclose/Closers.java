@@ -17,12 +17,9 @@ import java.util.List;
 /** Purpose: the ways to close apps, plus a few device-owner helpers. Each returns a short result text. */
 final class Closers {
     static String run(Context c) {
+        if (Prefs.mode(c) == Prefs.ACCESSIBILITY) return accessibility(c); // it cannot pick one app
         if (Prefs.scope(c) == Prefs.CURRENT) return current(c);
-        switch (Prefs.mode(c)) {
-            case Prefs.ACCESSIBILITY: return accessibility(c);
-            case Prefs.OWNER: return suspendBriefly(c, Apps.targets(c));
-            default: return soft(c);
-        }
+        return Prefs.mode(c) == Prefs.OWNER ? suspendBriefly(c, Apps.targets(c)) : soft(c);
     }
 
     /** Needs nothing: asks Android to stop background processes. Leaves the on-screen app alone. */

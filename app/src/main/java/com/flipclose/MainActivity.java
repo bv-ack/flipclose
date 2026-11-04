@@ -1,7 +1,9 @@
 package com.flipclose;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.app.admin.DevicePolicyManager;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
@@ -13,8 +15,10 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.PowerManager;
+import android.os.SystemClock;
 import android.provider.Settings;
 import android.text.InputType;
+import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
 import android.widget.CompoundButton;
@@ -27,13 +31,18 @@ import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
-/** Purpose: the one settings screen, with live feedback so you can see what works. */
+/** Purpose: the one settings screen (behind the PIN, if set), with live feedback so you can see what works. */
 public class MainActivity extends Activity implements SensorEventListener {
     private static final String[] SCOPES = {"Close all apps", "Close only the app in front"};
-    private static final String[] MODES = {"Soft: stop apps in the background", "Accessibility: clear recents", "Device owner: suspend apps"};
+    private static final String[] MODES = {"Soft: stop apps in the background", "Accessibility: clear recents (always all apps)", "Device owner: suspend apps"};
+    private static final long RELOCK_MS = 60000L;
+
+    private static boolean unlocked;
+    private static long leftAt;
 
     private interface Choice { void pick(int i); }
 
+    private final Handler ui = new Handler(Looper.getMainLooper());
     private TextView status;
     private SensorManager sm;
     private float z;
@@ -47,6 +56,125 @@ public class MainActivity extends Activity implements SensorEventListener {
             requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 1);
         }
         sm = getSystemService(SensorManager.class);
+    }
+
+    @Override protected void onResume() {
+        super.onResume();
+        if (unlocked && SystemClock.elapsedRealtime() - leftAt > RELOCK_MS) unlocked = false;
+        show();
+    }
+
+    @Override protected void onPause() {
+        super.onPause();
+        sm.unregisterListener(this);
+    }
+
+    @Override protected void onStop() {
+        super.onStop();
+        leftAt = SystemClock.elapsedRealtime();
+    }
+
+    private void show() {
+        if (Lock.isSet(this) && !unlocked) { gate(); return; }
+        buildMain();
+        DevicePolicyManager d = (DevicePolicyManager) getSystemService(DEVICE_POLICY_SERVICE);
+        PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+        slow = "\nDevice owner: " + (d.isDeviceOwnerApp(getPackageName()) ? "yes" : "no")
+                + "\nUsage access: " + (Apps.usageAllowed(this) ? "yes" : "no")
+                + "\nBackground: " + (pm.isIgnoringBatteryOptimizations(getPackageName()) ? "unrestricted" : "optimized (may be killed)")
+                + "\nOverlay: " + (ConfirmOverlay.allowed(this) ? "allowed" : "off")
+                + "\nPIN: " + (Lock.isSet(this) ? "set" : "not set");
+        sm.registerListener(this, sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), SensorManager.SENSOR_DELAY_UI);
+        refresh();
+    }
+
+    // ---- locked screen ----
+
+    private void gate() {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setGravity(Gravity.CENTER);
+        box.setPadding(60, 60, 60, 60);
+        TextView t = new TextView(this);
+        t.setText("FlipClose is locked");
+        t.setTextSize(22);
+        t.setGravity(Gravity.CENTER);
+        box.addView(t);
+        final EditText pin = pinField("PIN");
+        box.addView(pin);
+        final TextView msg = new TextView(this);
+        msg.setGravity(Gravity.CENTER);
+        box.addView(msg);
+        box.addView(button("Unlock", new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                long wait = Lock.waitMs(MainActivity.this);
+                if (wait > 0) { msg.setText("Too many tries. Wait " + (wait / 1000 + 1) + " s"); return; }
+                if (Lock.check(MainActivity.this, pin.getText().toString())) { unlocked = true; show(); }
+                else msg.setText("Wrong PIN");
+            }
+        }));
+        box.addView(button("Forgot PIN (recovery code)", new View.OnClickListener() {
+            @Override public void onClick(View v) { recoveryDialog(); }
+        }));
+        setContentView(box);
+    }
+
+    private void recoveryDialog() {
+        final EditText code = new EditText(this);
+        code.setHint("Recovery code");
+        new AlertDialog.Builder(this).setTitle("Recovery").setView(code)
+                .setPositiveButton("Unlock", new DialogInterface.OnClickListener() {
+                    @Override public void onClick(DialogInterface d, int w) {
+                        if (Lock.useRecovery(MainActivity.this, code.getText().toString())) {
+                            unlocked = true;
+                            toast("PIN removed. Set a new one");
+                            show();
+                        } else {
+                            long wait = Lock.waitMs(MainActivity.this);
+                            toast(wait > 0 ? "Too many tries. Wait " + (wait / 1000 + 1) + " s" : "Wrong code");
+                        }
+                    }
+                }).setNegativeButton("Cancel", null).show();
+    }
+
+    private void setPinDialog() {
+        LinearLayout l = new LinearLayout(this);
+        l.setOrientation(LinearLayout.VERTICAL);
+        l.setPadding(40, 20, 40, 0);
+        final EditText a = pinField("New 6-digit PIN");
+        final EditText b = pinField("Repeat PIN");
+        l.addView(a);
+        l.addView(b);
+        new AlertDialog.Builder(this).setTitle("Set PIN").setView(l)
+                .setPositiveButton("Set", new DialogInterface.OnClickListener() {
+                    @Override public void onClick(DialogInterface d, int w) {
+                        String p1 = a.getText().toString();
+                        if (!p1.matches("\\d{6}")) { toast("The PIN must be exactly 6 digits"); return; }
+                        if (!p1.equals(b.getText().toString())) { toast("The PINs don't match"); return; }
+                        showCode(Lock.set(MainActivity.this, p1));
+                    }
+                }).setNegativeButton("Cancel", null).show();
+    }
+
+    private void showCode(String code) {
+        unlocked = true;
+        new AlertDialog.Builder(this).setTitle("Recovery code").setCancelable(false)
+                .setMessage("Write this down or give it to someone you trust. It is shown only once, and it removes the PIN if you forget it.\n\n" + code)
+                .setPositiveButton("I saved it", new DialogInterface.OnClickListener() {
+                    @Override public void onClick(DialogInterface d, int w) { show(); }
+                }).show();
+    }
+
+    private EditText pinField(String hint) {
+        EditText e = new EditText(this);
+        e.setHint(hint);
+        e.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_VARIATION_PASSWORD);
+        return e;
+    }
+
+    // ---- main screen ----
+
+    private void buildMain() {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(40, 40, 40, 40);
@@ -70,13 +198,17 @@ public class MainActivity extends Activity implements SensorEventListener {
         });
         root.addView(run);
 
-        root.addView(heading("What to close"));
+        root.addView(heading("What to close (Soft and Device owner)"));
         root.addView(radios(SCOPES, Prefs.scope(this), 2000, new Choice() {
             @Override public void pick(int i) { Prefs.setScope(MainActivity.this, i); toast("Saved: " + SCOPES[i]); }
         }));
         root.addView(heading("How to close"));
         root.addView(radios(MODES, Prefs.mode(this), 1000, new Choice() {
-            @Override public void pick(int i) { Prefs.setMode(MainActivity.this, i); toast("Saved: " + MODES[i]); }
+            @Override public void pick(int i) {
+                Prefs.setMode(MainActivity.this, i);
+                toast("Saved: " + MODES[i]);
+                ui.post(new Runnable() { @Override public void run() { show(); } });
+            }
         }));
 
         final EditText sec = new EditText(this);
@@ -102,7 +234,7 @@ public class MainActivity extends Activity implements SensorEventListener {
         root.addView(button("Test close in 5 s", new View.OnClickListener() {
             @Override public void onClick(View v) {
                 toast("Open some apps, then go home. Closing in 5 s");
-                new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
+                ui.postDelayed(new Runnable() {
                     @Override public void run() {
                         String r;
                         try { r = Closers.run(MainActivity.this); } catch (Exception e) { r = "Failed: " + e.getMessage(); }
@@ -112,6 +244,16 @@ public class MainActivity extends Activity implements SensorEventListener {
                 }, 5000);
             }
         }));
+
+        root.addView(heading("PIN lock (protects this screen)"));
+        root.addView(button(Lock.isSet(this) ? "Change PIN" : "Set 6-digit PIN", new View.OnClickListener() {
+            @Override public void onClick(View v) { setPinDialog(); }
+        }));
+        if (Lock.isSet(this)) {
+            root.addView(button("Remove PIN", new View.OnClickListener() {
+                @Override public void onClick(View v) { Lock.clear(MainActivity.this); toast("PIN removed"); show(); }
+            }));
+        }
 
         root.addView(heading("Permissions and tools"));
         root.addView(button("Never-close apps", open(new Intent(this, NeverCloseActivity.class))));
@@ -136,27 +278,11 @@ public class MainActivity extends Activity implements SensorEventListener {
         }));
     }
 
-    @Override protected void onResume() {
-        super.onResume();
-        DevicePolicyManager d = (DevicePolicyManager) getSystemService(DEVICE_POLICY_SERVICE);
-        PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
-        slow = "\nDevice owner: " + (d.isDeviceOwnerApp(getPackageName()) ? "yes" : "no")
-                + "\nUsage access: " + (Apps.usageAllowed(this) ? "yes" : "no")
-                + "\nBackground: " + (pm.isIgnoringBatteryOptimizations(getPackageName()) ? "unrestricted" : "optimized (may be killed)")
-                + "\nOverlay: " + (ConfirmOverlay.allowed(this) ? "allowed" : "off");
-        sm.registerListener(this, sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), SensorManager.SENSOR_DELAY_UI);
-        refresh();
-    }
-
-    @Override protected void onPause() {
-        super.onPause();
-        sm.unregisterListener(this);
-    }
-
     @Override public void onSensorChanged(SensorEvent e) { z = e.values[2]; refresh(); }
     @Override public void onAccuracyChanged(Sensor s, int a) {}
 
     private void refresh() {
+        if (status == null) return;
         status.setText(String.format("Sensor z: %.1f (%s)", z, z < -7.5f ? "face-down" : z > 7.5f ? "face-up" : "tilted")
                 + "\nService: " + (TriggerService.running ? "running" : "stopped")
                 + "\nAccessibility: " + (CloserAccessibilityService.instance != null ? "running" : "off")

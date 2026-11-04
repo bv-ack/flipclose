@@ -18,7 +18,11 @@ final class Prefs {
     static void setEnabled(Context c, boolean v) { p(c).edit().putBoolean("enabled", v).apply(); }
     static int mode(Context c) { return p(c).getInt("mode", SOFT); }
     static void setMode(Context c, int v) { p(c).edit().putInt("mode", v).apply(); }
-    static int scope(Context c) { return p(c).getInt("scope", ALL); }
+    /** Not chosen yet: device owner defaults to the app in front, the other modes to all apps. */
+    static int scope(Context c) {
+        int s = p(c).getInt("scope", -1);
+        return s >= 0 ? s : (mode(c) == OWNER ? CURRENT : ALL);
+    }
     static void setScope(Context c, int v) { p(c).edit().putInt("scope", v).apply(); }
     static int countdown(Context c) { return p(c).getInt("count", 5); }
     static void setCountdown(Context c, int v) { p(c).edit().putInt("count", Math.max(0, v)).apply(); }

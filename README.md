@@ -17,3 +17,7 @@ Device owner tools: lock Private DNS to Cloudflare's family filter (family.cloud
 Allow "Running in background" in the app so the service is not killed.
 
 Optional release signing: add repo secrets KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS. Without them the release APK uses a debug key.
+
+PIN lock: optional 6-digit PIN for the settings screen (stored only as a salted hash; wrong tries add growing delays). Setting it shows a one-time recovery code that removes the PIN: write it down or give it to someone you trust. The screen locks again 60 s after you leave the app. The PIN protects this screen only; it does not yet stop uninstalling or clearing the app's data (device owner can block those later).
+
+Accessibility mode always clears all apps (it cannot pick one). Soft mode only stops the app: its card can stay in recents.
