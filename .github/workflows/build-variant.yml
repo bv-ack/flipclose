@@ -1,0 +1,66 @@
+name: build-variant
+on:
+  workflow_dispatch:
+    inputs:
+      suffix:
+        description: 'Package suffix, letters and digits only (two gives com.flipclose.two)'
+        required: true
+        default: 'two'
+      label:
+        description: 'App name shown on the phone (letters, digits, spaces, dashes)'
+        required: true
+        default: 'FlipClose 2'
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Repackage with the new package name and app name
+        env:
+          SUFFIX: ${{ inputs.suffix }}
+          LABEL: ${{ inputs.label }}
+        run: |
+          case "$SUFFIX" in ""|*[!a-zA-Z0-9]*) echo "The suffix must be letters and digits only"; exit 1;; esac
+          case "$LABEL" in ""|*[!a-zA-Z0-9\ -]*) echo "The name may only use letters, digits, spaces and dashes"; exit 1;; esac
+          grep -q "applicationId 'com.flipclose'" app/build.gradle || { echo "applicationId line not found in app/build.gradle"; exit 1; }
+          sed -i "s#applicationId 'com.flipclose'#applicationId 'com.flipclose.$SUFFIX'#" app/build.gradle
+          sed -i "s#android:label=\"@string/app_name\"#android:label=\"$LABEL\"#g" app/src/main/AndroidManifest.xml
+          grep -n "applicationId" app/build.gradle
+          grep -n "android:label" app/src/main/AndroidManifest.xml
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build
+        env:
+          SUFFIX: ${{ inputs.suffix }}
+          KS_B64: ${{ secrets.KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
+          KS_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          if [ -n "$KS_B64" ]; then
+            echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/ks.jks"
+            export KS_FILE="$RUNNER_TEMP/ks.jks"
+          fi
+          gradle assembleRelease -PvCode=${{ github.run_number }} --no-daemon
+          mkdir -p /tmp/rel
+          cp "$(find app/build/outputs -name '*.apk' -path '*release*' | head -1)" "/tmp/rel/FlipClose-$SUFFIX.apk"
+
+      - name: Release (marked as pre-release)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SUFFIX: ${{ inputs.suffix }}
+        run: |
+          gh release create "variant-$SUFFIX-${{ github.run_number }}" /tmp/rel/* --prerelease \
+            --title "Variant $SUFFIX (build ${{ github.run_number }})" \
+            --notes "Separate copy with package com.flipclose.$SUFFIX. Installs next to the original."
