@@ -41,6 +41,18 @@ final class Prefs {
     static int dtStart(Context c) { return p(c).getInt("dts", 22 * 60); }       // minutes after midnight
     static int dtEnd(Context c) { return p(c).getInt("dte", 7 * 60); }
     static void setDtTimes(Context c, int s, int e) { p(c).edit().putInt("dts", s).putInt("dte", e).apply(); }
+    static Set<String> channels(Context c) { return set(c, "ytch"); }            // YouTube channels the browser may open
+    static void setChannels(Context c, Set<String> v) { put(c, "ytch", v); }
+    static boolean ytOnly(Context c) { return p(c).getBoolean("ytonly", true); }
+    static void setYtOnly(Context c, boolean v) { p(c).edit().putBoolean("ytonly", v).apply(); }
+    static boolean waHide(Context c) { return p(c).getBoolean("wahide", true); }
+    static void setWaHide(Context c, boolean v) { p(c).edit().putBoolean("wahide", v).apply(); }
+    static boolean bImagesOff(Context c) { return p(c).getBoolean("bimg", false); }
+    static void setBImagesOff(Context c, boolean v) { p(c).edit().putBoolean("bimg", v).apply(); }
+    static boolean chromeImagesOff(Context c) { return p(c).getBoolean("chimg", false); }
+    static void setChromeImagesOff(Context c, boolean v) { p(c).edit().putBoolean("chimg", v).apply(); }
+    static String chromeBlock(Context c) { return p(c).getString("chblock", ""); }
+    static void setChromeBlock(Context c, String v) { p(c).edit().putString("chblock", v).apply(); }
     static String last(Context c) { return p(c).getString("last", "nothing yet"); }
     static void setLast(Context c, String v) { p(c).edit().putString("last", v).apply(); }
     static Set<String> keep(Context c) {

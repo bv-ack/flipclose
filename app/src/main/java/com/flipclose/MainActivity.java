@@ -296,6 +296,43 @@ public class MainActivity extends Activity implements SensorEventListener {
             @Override public void onClick(View v) { applyNow(true); }
         }));
 
+        root.addView(heading("Safe browser (its own icon on the home screen)"));
+        root.addView(sw("YouTube: only allowed channels", Prefs.ytOnly(this), new CompoundButton.OnCheckedChangeListener() {
+            @Override public void onCheckedChanged(CompoundButton v, boolean on) { Prefs.setYtOnly(MainActivity.this, on); }
+        }));
+        root.addView(sw("WhatsApp: hide Status and Channels", Prefs.waHide(this), new CompoundButton.OnCheckedChangeListener() {
+            @Override public void onCheckedChanged(CompoundButton v, boolean on) { Prefs.setWaHide(MainActivity.this, on); }
+        }));
+        root.addView(sw("Block images in the browser", Prefs.bImagesOff(this), new CompoundButton.OnCheckedChangeListener() {
+            @Override public void onCheckedChanged(CompoundButton v, boolean on) { Prefs.setBImagesOff(MainActivity.this, on); }
+        }));
+        root.addView(button("Allowed YouTube channels", open(new Intent(this, ChannelsActivity.class))));
+
+        root.addView(heading("Chrome rules (device owner)"));
+        root.addView(sw("Block images in Chrome (may not work on Android)", Prefs.chromeImagesOff(this), new CompoundButton.OnCheckedChangeListener() {
+            @Override public void onCheckedChanged(CompoundButton v, boolean on) { Prefs.setChromeImagesOff(MainActivity.this, on); }
+        }));
+        final EditText sites = new EditText(this);
+        sites.setHint("Sites Chrome must not open, one per line (youtube.com)");
+        sites.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+        sites.setText(Prefs.chromeBlock(this));
+        root.addView(sites);
+        root.addView(button("Send rules to Chrome", new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                Prefs.setChromeBlock(MainActivity.this, sites.getText().toString());
+                String r;
+                try { r = Closers.chromeRules(MainActivity.this, true); } catch (Exception e) { r = "Failed: " + e.getMessage(); }
+                toast(r);
+            }
+        }));
+        root.addView(button("Clear Chrome rules", new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                String r;
+                try { r = Closers.chromeRules(MainActivity.this, false); } catch (Exception e) { r = "Failed: " + e.getMessage(); }
+                toast(r);
+            }
+        }));
+
         root.addView(heading("PIN lock (protects this screen)"));
         root.addView(button(Lock.isSet(this) ? "Change PIN" : "Set 6-digit PIN", new View.OnClickListener() {
             @Override public void onClick(View v) { setPinDialog(); }
@@ -401,6 +438,14 @@ public class MainActivity extends Activity implements SensorEventListener {
                 }).start();
             }
         };
+    }
+
+    private Switch sw(String text, boolean on, CompoundButton.OnCheckedChangeListener l) {
+        Switch s = new Switch(this);
+        s.setText(text);
+        s.setChecked(on);
+        s.setOnCheckedChangeListener(l);
+        return s;
     }
 
     private void releaseNow() {

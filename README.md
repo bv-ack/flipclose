@@ -26,3 +26,11 @@ Blocked apps and downtime (device owner): "Blocked apps" are kept suspended all 
 "Protect this app" blocks uninstalling it and clearing its data or force-stopping it from Settings. "Lock date and time" stops the clock being changed by hand. Both can be undone from the same screen, behind the PIN. Keep the recovery code safe.
 
 Leaving device owner: "Release device owner" (Device owner tools) first lifts every suspension, the DNS and date/time locks and the app protection, then removes this app as device owner, so it can be uninstalled normally. Try it right after you make the app device owner, before relying on any rule. If the PIN and the recovery code are both lost, the locked screen has "Lost the PIN and the code? Leave device owner": press it, wait 1 hour, press it again (the right PIN cancels it). A factory reset is never blocked by this app.
+
+Safe Browser (second icon, "Safe Browser"): a small WebView browser for YouTube and WhatsApp Web only; every other site is refused, and app links are blocked.
+- YouTube: only channels on your list (settings: "Allowed YouTube channels", add @handles or links; untick to remove). Home, search, feeds and other channels are refused. A video is checked with YouTube's public oEmbed address; if it can't be checked, it is blocked. Pages are checked every 0.6 s because YouTube changes pages without a real page load.
+- WhatsApp Web: opened as a desktop browser; the Status and Channels buttons are hidden by matching their labels and icons. If WhatsApp renames them, they simply show again. No attachments, no notifications.
+- "Block images in the browser" applies the next time you pick a site.
+The settings live in FlipClose (behind the PIN), not in the browser.
+
+Chrome rules (device owner): sends managed configuration to Chrome (blocked sites; images off if Chrome accepts it). Restart Chrome, open chrome://policy and tap Reload policies to see what it accepted. "Clear Chrome rules" removes them (also done by Release).

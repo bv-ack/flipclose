@@ -6,6 +6,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.UserManager;
@@ -117,6 +118,33 @@ final class Closers {
         return "Date and time unlocked";
     }
 
+    private static final String CHROME = "com.android.chrome";
+
+    /** Device owner: send rules to Chrome through managed configuration (images off, blocked sites), or clear them. */
+    static String chromeRules(Context c, boolean on) {
+        DevicePolicyManager d = (DevicePolicyManager) c.getSystemService(Context.DEVICE_POLICY_SERVICE);
+        ComponentName admin = new ComponentName(c, AdminReceiver.class);
+        if (!d.isDeviceOwnerApp(c.getPackageName())) return "Not device owner";
+        Bundle b = new Bundle();
+        int n = 0;
+        if (on) {
+            if (Prefs.chromeImagesOff(c)) { b.putInt("DefaultImagesSetting", 2); n++; }
+            StringBuilder json = new StringBuilder("[");
+            int sites = 0;
+            for (String line : Prefs.chromeBlock(c).split("\n")) {
+                String s = line.trim().replace("\"", "").replace("\\", "");
+                if (s.isEmpty()) continue;
+                if (sites++ > 0) json.append(",");
+                json.append("\"").append(s).append("\"");
+            }
+            json.append("]");
+            if (sites > 0) { b.putString("URLBlocklist", json.toString()); n++; }
+        }
+        d.setApplicationRestrictions(admin, CHROME, b);
+        return on ? "Sent " + n + " rule(s) to Chrome. Restart Chrome, open chrome://policy and tap Reload policies to see what it accepted"
+                : "Chrome rules cleared";
+    }
+
     /** Undo everything this app set as device owner, then give up ownership so it can be uninstalled. */
     @SuppressWarnings("deprecation")
     static String release(Context c) {
@@ -124,6 +152,7 @@ final class Closers {
         if (!d.isDeviceOwnerApp(c.getPackageName())) return "Not device owner, nothing to release";
         // each undo step on its own, so one failure does not stop the rest
         try { Prefs.setDtOn(c, false); Prefs.setBlocked(c, new HashSet<String>()); Prefs.setDtApps(c, new HashSet<String>()); Enforcer.apply(c, true); } catch (Exception e) { /* go on */ }
+        try { chromeRules(c, false); } catch (Exception e) { /* go on */ }
         try { dns(c, false); } catch (Exception e) { /* go on */ }
         try { lockTime(c, false); } catch (Exception e) { /* go on */ }
         try { protectApp(c, false); } catch (Exception e) { /* go on */ }
