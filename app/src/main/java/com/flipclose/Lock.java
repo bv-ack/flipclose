@@ -47,6 +47,17 @@ final class Lock {
         return good;
     }
 
+    private static final long EXIT_WAIT_MS = 3600000L; // 1 hour
+
+    /** Starts the "lost the PIN and the code" exit timer. */
+    static void startExit(Context c) { p(c).edit().putLong("exitat", System.currentTimeMillis() + EXIT_WAIT_MS).apply(); }
+
+    /** -1 = not started, 0 = ready, otherwise milliseconds left. */
+    static long exitLeftMs(Context c) {
+        long at = p(c).getLong("exitat", 0L);
+        return at == 0L ? -1L : Math.max(0L, at - System.currentTimeMillis());
+    }
+
     static void clear(Context c) { p(c).edit().clear().apply(); }
 
     /** Milliseconds left before another try is allowed. */
@@ -54,7 +65,7 @@ final class Lock {
         return Math.max(0L, p(c).getLong("until", 0L) - System.currentTimeMillis());
     }
 
-    private static void reset(Context c) { p(c).edit().putInt("fails", 0).putLong("until", 0L).apply(); }
+    private static void reset(Context c) { p(c).edit().putInt("fails", 0).putLong("until", 0L).remove("exitat").apply(); }
 
     /** From the 5th wrong try on: 30 s, then 1 min, 2 min, ... up to 1 hour. */
     private static void fail(Context c) {

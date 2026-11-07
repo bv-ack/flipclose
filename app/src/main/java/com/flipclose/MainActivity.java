@@ -120,6 +120,21 @@ public class MainActivity extends Activity implements SensorEventListener {
         box.addView(button("Forgot PIN (recovery code)", new View.OnClickListener() {
             @Override public void onClick(View v) { recoveryDialog(); }
         }));
+        box.addView(button("Lost the PIN and the code? Leave device owner", new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                long left = Lock.exitLeftMs(MainActivity.this);
+                if (left < 0) {
+                    Lock.startExit(MainActivity.this);
+                    msg.setText("Started. In 1 hour, press this button again to remove the PIN and leave device owner. Entering the right PIN cancels it.");
+                } else if (left > 0) {
+                    msg.setText("About " + (left / 60000 + 1) + " min left. Press again then.");
+                } else {
+                    Lock.clear(MainActivity.this);
+                    unlocked = true;
+                    releaseNow();
+                }
+            }
+        }));
         setContentView(box);
     }
 
@@ -305,6 +320,15 @@ public class MainActivity extends Activity implements SensorEventListener {
         root.addView(heading("Device owner tools"));
         root.addView(button("Cloudflare family DNS", dnsClick(true)));
         root.addView(button("Reset DNS to automatic", dnsClick(false)));
+        root.addView(button("Release device owner (undo everything and leave)", new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                new AlertDialog.Builder(MainActivity.this).setTitle("Release device owner?")
+                        .setMessage("This lifts all suspensions, the DNS and date/time locks and the app protection, then removes this app as device owner. You can uninstall the app afterwards.")
+                        .setPositiveButton("Release", new DialogInterface.OnClickListener() {
+                            @Override public void onClick(DialogInterface d, int w) { releaseNow(); }
+                        }).setNegativeButton("Cancel", null).show();
+            }
+        }));
         root.addView(button("Protect this app (no uninstall, no clearing data)", ownerTool(0)));
         root.addView(button("Remove app protection", ownerTool(1)));
         root.addView(button("Lock date and time", ownerTool(2)));
@@ -377,6 +401,14 @@ public class MainActivity extends Activity implements SensorEventListener {
                 }).start();
             }
         };
+    }
+
+    private void releaseNow() {
+        String r;
+        try { r = Closers.release(this); } catch (Exception e) { r = "Failed: " + e.getMessage(); }
+        Prefs.setLast(this, r);
+        toast(r);
+        show();
     }
 
     private void applyNow(boolean force) {

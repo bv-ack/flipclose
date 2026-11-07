@@ -13,6 +13,7 @@ import android.provider.Settings;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 
 /** Purpose: the ways to close apps, plus a few device-owner helpers. Each returns a short result text. */
@@ -114,6 +115,24 @@ final class Closers {
         }
         d.clearUserRestriction(admin, UserManager.DISALLOW_CONFIG_DATE_TIME);
         return "Date and time unlocked";
+    }
+
+    /** Undo everything this app set as device owner, then give up ownership so it can be uninstalled. */
+    @SuppressWarnings("deprecation")
+    static String release(Context c) {
+        DevicePolicyManager d = (DevicePolicyManager) c.getSystemService(Context.DEVICE_POLICY_SERVICE);
+        if (!d.isDeviceOwnerApp(c.getPackageName())) return "Not device owner, nothing to release";
+        // each undo step on its own, so one failure does not stop the rest
+        try { Prefs.setDtOn(c, false); Prefs.setBlocked(c, new HashSet<String>()); Prefs.setDtApps(c, new HashSet<String>()); Enforcer.apply(c, true); } catch (Exception e) { /* go on */ }
+        try { dns(c, false); } catch (Exception e) { /* go on */ }
+        try { lockTime(c, false); } catch (Exception e) { /* go on */ }
+        try { protectApp(c, false); } catch (Exception e) { /* go on */ }
+        try {
+            d.clearDeviceOwnerApp(c.getPackageName());
+        } catch (Exception e) {
+            return "Android refused to release: " + e.getMessage();
+        }
+        return d.isDeviceOwnerApp(c.getPackageName()) ? "Still device owner" : "Released: this app is no longer device owner";
     }
 
     /** Device owner: lock Private DNS to Cloudflare's family filter, or give it back to automatic. */
