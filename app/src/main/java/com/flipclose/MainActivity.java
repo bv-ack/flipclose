@@ -309,9 +309,6 @@ public class MainActivity extends Activity implements SensorEventListener {
         root.addView(button("Allowed YouTube channels", open(new Intent(this, ChannelsActivity.class))));
 
         root.addView(heading("Chrome rules (device owner)"));
-        root.addView(sw("Block images in Chrome (may not work on Android)", Prefs.chromeImagesOff(this), new CompoundButton.OnCheckedChangeListener() {
-            @Override public void onCheckedChanged(CompoundButton v, boolean on) { Prefs.setChromeImagesOff(MainActivity.this, on); }
-        }));
         final EditText sites = new EditText(this);
         sites.setHint("Sites Chrome must not open, one per line (youtube.com)");
         sites.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);

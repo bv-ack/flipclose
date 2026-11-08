@@ -120,7 +120,7 @@ final class Closers {
 
     private static final String CHROME = "com.android.chrome";
 
-    /** Device owner: send rules to Chrome through managed configuration (images off, blocked sites), or clear them. */
+    /** Device owner: send rules to Chrome through managed configuration (blocked sites), or clear them. */
     static String chromeRules(Context c, boolean on) {
         DevicePolicyManager d = (DevicePolicyManager) c.getSystemService(Context.DEVICE_POLICY_SERVICE);
         ComponentName admin = new ComponentName(c, AdminReceiver.class);
@@ -128,7 +128,6 @@ final class Closers {
         Bundle b = new Bundle();
         int n = 0;
         if (on) {
-            if (Prefs.chromeImagesOff(c)) { b.putInt("DefaultImagesSetting", 2); n++; }
             StringBuilder json = new StringBuilder("[");
             int sites = 0;
             for (String line : Prefs.chromeBlock(c).split("\n")) {

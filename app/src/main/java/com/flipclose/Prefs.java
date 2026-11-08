@@ -49,8 +49,6 @@ final class Prefs {
     static void setWaHide(Context c, boolean v) { p(c).edit().putBoolean("wahide", v).apply(); }
     static boolean bImagesOff(Context c) { return p(c).getBoolean("bimg", false); }
     static void setBImagesOff(Context c, boolean v) { p(c).edit().putBoolean("bimg", v).apply(); }
-    static boolean chromeImagesOff(Context c) { return p(c).getBoolean("chimg", false); }
-    static void setChromeImagesOff(Context c, boolean v) { p(c).edit().putBoolean("chimg", v).apply(); }
     static String chromeBlock(Context c) { return p(c).getString("chblock", ""); }
     static void setChromeBlock(Context c, String v) { p(c).edit().putString("chblock", v).apply(); }
     static String last(Context c) { return p(c).getString("last", "nothing yet"); }

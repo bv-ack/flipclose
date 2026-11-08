@@ -1,36 +1,68 @@
 # FlipClose
 
-Turn the device face-down and keep it there for about a second: a countdown starts (notification with Cancel, or a cover screen if the overlay permission is allowed). Turning it back over cancels. Countdown 0 closes right away.
+[![Latest](https://img.shields.io/github/v/release/USERNAME/REPO?label=Latest&include_prereleases)](https://github.com/USERNAME/REPO/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/USERNAME/REPO/total?label=Downloads)](https://github.com/USERNAME/REPO/releases)
 
-What to close: all apps, or only the app in front (needs Usage access).
-How to close:
-- Soft: asks Android to stop background apps. No setup. With "only the app in front" it first leaves the app (accessibility service, or the overlay permission), then stops it.
-- Accessibility: opens recents and presses the clear-all button. Enable the service in Accessibility settings. If the toggle is greyed out (sideloaded app, Android 13+): App info, three-dot menu, "Allow restricted settings". Set the button text for your device in the app. Apps your device keeps alive on purpose may survive.
-- Device owner: suspends then lifts the suspension, which stops the apps. One-time setup, no accounts or extra users on the device, and no other device owner (e.g. TestDPC):
-  `adb shell dpm set-device-owner com.flipclose/.AdminReceiver`
-  (also possible through Shizuku wireless debugging or root). "Restore apps" lifts any suspension left behind.
+| [Guide](docs/GUIDE.md) | [Changelog](CHANGELOG.md) |
+|------------------------|---------------------------|
 
-Never closed: Settings, System UI, phone/dialer, installer, Play services, WebView, Shizuku/Dhizuku, this app, your launcher, keyboards, anything in the never-close list. "Close all" also skips built-in system apps that were never updated.
+> Replace `USERNAME/REPO` above with your own GitHub user and repository name.
 
-Device owner tools: lock Private DNS to Cloudflare's family filter (family.cloudflare-dns.com) or return it to automatic.
+## Introduction
 
-Allow "Running in background" in the app so the service is not killed.
+FlipClose closes apps when you turn the device face-down. It has grown into a small self-control kit: blocked apps and downtime, a PIN lock, a Safe Browser for YouTube and WhatsApp Web, and tools for a device owner.
 
-Optional release signing: add repo secrets KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS. Without them the release APK uses a debug key.
+## Features
 
-PIN lock: optional 6-digit PIN for the settings screen (stored only as a salted hash; wrong tries add growing delays). Setting it shows a one-time recovery code that removes the PIN: write it down or give it to someone you trust. The screen locks again 60 s after you leave the app. The PIN protects this screen only; it does not yet stop uninstalling or clearing the app's data (device owner can block those later).
+- **Face-down trigger.** Hold the device face-down for about a second. A countdown starts (notification with Cancel, or a cover screen); turning it back over cancels.
+- **Three ways to close apps.** Soft (stops background apps, no setup), Accessibility (clears recents), Device owner (suspends apps briefly). Scope: all apps, or only the app in front.
+- **Never-close list** and a fixed protected list (Settings, System UI, dialer, installer, Play services, your launcher, keyboards, this app).
+- **Blocked apps and downtime** (device owner). Pick any package, including background components. A downtime window can run past midnight.
+- **PIN lock** for the settings screen, with a one-time recovery code and growing delays after wrong tries.
+- **Safe Browser** (second icon). YouTube limited to allowed channels, WhatsApp Web with Status and Channels hidden, optional images off. Everything else is refused.
+- **Device owner tools.** Cloudflare family DNS lock, date/time lock, protect this app from uninstall and clearing data, Chrome site rules.
+- **A way out.** "Release device owner" undoes every rule and gives up ownership. This app never blocks a factory reset.
 
-Accessibility mode always clears all apps (it cannot pick one). Soft mode only stops the app: its card can stay in recents.
+## Installation
 
-Blocked apps and downtime (device owner): "Blocked apps" are kept suspended all the time; "Downtime apps" are suspended between the start and end times (a window can run past midnight). The pickers can list every installed package, including background components. Rules are applied when the service starts, every 30 s, and whenever you open the app, so the service must be running for downtime to start and end on time. Fixed protected apps (Settings, System UI, dialer, installer, Play services, launcher, keyboards, this app...) are never suspended.
-"Protect this app" blocks uninstalling it and clearing its data or force-stopping it from Settings. "Lock date and time" stops the clock being changed by hand. Both can be undone from the same screen, behind the PIN. Keep the recovery code safe.
+Download the APK from [Releases](https://github.com/USERNAME/REPO/releases), allow installs from your browser when Android asks, and install. No PC is needed: the [guide](docs/GUIDE.md) shows how to build it on GitHub from a phone.
 
-Leaving device owner: "Release device owner" (Device owner tools) first lifts every suspension, the DNS and date/time locks and the app protection, then removes this app as device owner, so it can be uninstalled normally. Try it right after you make the app device owner, before relying on any rule. If the PIN and the recovery code are both lost, the locked screen has "Lost the PIN and the code? Leave device owner": press it, wait 1 hour, press it again (the right PIN cancels it). A factory reset is never blocked by this app.
+## Activation (device owner)
 
-Safe Browser (second icon, "Safe Browser"): a small WebView browser for YouTube and WhatsApp Web only; every other site is refused, and app links are blocked.
-- YouTube: only channels on your list (settings: "Allowed YouTube channels", add @handles or links; untick to remove). Home, search, feeds and other channels are refused. A video is checked with YouTube's public oEmbed address; if it can't be checked, it is blocked. Pages are checked every 0.6 s because YouTube changes pages without a real page load.
-- WhatsApp Web: opened as a desktop browser; the Status and Channels buttons are hidden by matching their labels and icons. If WhatsApp renames them, they simply show again. No attachments, no notifications.
-- "Block images in the browser" applies the next time you pick a site.
-The settings live in FlipClose (behind the PIN), not in the browser.
+Only the device-owner features need this. Soft and Accessibility modes, the PIN and the Safe Browser work without it.
 
-Chrome rules (device owner): sends managed configuration to Chrome (blocked sites; images off if Chrome accepts it). Restart Chrome, open chrome://policy and tap Reload policies to see what it accepted. "Clear Chrome rules" removes them (also done by Release).
+> [!IMPORTANT]
+> Remove all accounts from the device first, and make sure no other app is device owner. Then, from wireless debugging (for example through Shizuku) or ADB:
+> `dpm set-device-owner com.flipclose/.AdminReceiver`
+> For a renamed variant, use the full class name: `dpm set-device-owner com.flipclose.two/com.flipclose.AdminReceiver`.
+
+> [!TIP]
+> Right after activating, press **Release device owner** once and confirm it says "Released", then activate again. Do this before you rely on any rule.
+
+## Supported versions
+
+Built for Android 8.0 and newer. Some tools need more: the DNS lock needs Android 10, app protection and the date/time lock work best on Android 11.
+
+## Safety
+
+- Device owner can be released from inside the app (Device owner tools, behind the PIN).
+- If both the PIN and the recovery code are lost, the locked screen has an exit that works after a one-hour wait.
+- Factory reset is never blocked.
+
+## Known limits
+
+- Chrome on Android reports the images-off policy as unknown, so image blocking lives in the Safe Browser.
+- The Safe Browser is a WebView: no Google sign-in, no attachments, no notifications. YouTube and WhatsApp can change their pages; the channel check is built to block when unsure.
+- Soft mode stops an app but its card can stay in recents.
+
+## Build from source
+
+The repository is built by GitHub Actions: upload the project zip to the repository root and the workflow unpacks it, builds it and publishes a release. See the [guide](docs/GUIDE.md).
+
+## Credits
+
+Written together with Claude (Anthropic).
+
+## License
+
+Not chosen yet. Add a `LICENSE` file before sharing the code more widely.
