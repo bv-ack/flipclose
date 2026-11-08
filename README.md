@@ -1,7 +1,7 @@
 # FlipClose
 
 [![Latest](https://img.shields.io/github/v/release/bv-ack/flipclose?label=Latest&include_prereleases)](https://github.com/USERNAME/REPO/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/USERNAME/REPO/total?label=Downloads)](https://github.com/USERNAME/REPO/releases)
+[![Downloads](https://img.shields.io/github/downloads/bv-ack/flipclose/total?label=Downloads)](https://github.com/USERNAME/REPO/releases)
 
 | [Guide](docs/GUIDE.md) | [Changelog](CHANGELOG.md) |
 |------------------------|---------------------------|
